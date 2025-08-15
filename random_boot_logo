@@ -1,0 +1,52 @@
+#!/bin/bash
+
+# Define  directories
+BOOTLOGOS="/userdata/bootlogos"
+NEXTIMAGE_FILE="$BOOTLOGOS/.nextimage"
+BOOTLOGO="/boot/bootlogo.bmp"
+
+# Check if the folder exists
+if [ ! -d "$BOOTLOGOS" ]; then
+    exit 1
+fi
+
+# Find all .bmp files in bootlogos
+mapfile -t BMP_FILES < <(find "$BOOTLOGOS" -maxdepth 1 -type f -name "*.bmp" | sort)
+
+# Count how many .bmp files exist
+NUM_FILES=${#BMP_FILES[@]}
+
+if [ "$NUM_FILES" -eq 0 ]; then
+    exit 1
+fi
+
+# Load last index if it exists
+LAST_INDEX=0
+if [ -f "$NEXTIMAGE_FILE" ]; then
+    LAST_INDEX=$(cat "$NEXTIMAGE_FILE")
+fi
+
+# Generate a new random index, different from LAST_INDEX
+while :; do
+    RAND_INDEX=$(( (RANDOM % NUM_FILES) + 1 ))
+    if [ "$RAND_INDEX" -ne "$LAST_INDEX" ] || [ "$NUM_FILES" -eq 1 ]; then
+        break
+    fi
+done
+
+# Save the new index
+echo "$RAND_INDEX" > "$NEXTIMAGE_FILE"
+
+# Pick the file at that index
+SELECTED_FILE="${BMP_FILES[$((RAND_INDEX-1))]}"
+
+# Make /boot writable
+mount -o remount,rw /boot
+
+# Copy it into root as bootlogo.bmp
+cp -f "$SELECTED_FILE" "$BOOTLOGO"
+
+# Make /boot only readable
+mount -o remount,r /boot
+
+sync
