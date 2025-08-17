@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# File path
+FILE="/usr/bin/power-button"
+
+# Check if the file exists
+if [[ -f "$FILE" ]]; then
+    # Replace LONG_PRESS_THRESHOLD=2 with LONG_PRESS_THRESHOLD=1
+    sed -i 's/^LONG_PRESS_THRESHOLD=2$/LONG_PRESS_THRESHOLD=1/' "$FILE"
+    # Always echo 1 to never sleep
+    sed -i 's/echo "0" > "\$POWER_BUTTON_STATE"/echo "1" > "\$POWER_BUTTON_STATE"/' "$RELEASE"
+else
+    exit 1
+fi
+
