@@ -2,9 +2,9 @@
 
 # File path
 FILE="/usr/bin/power-button"
-
+RELEASE="/usr/bin/power-button-release"
 # Check if the file exists
-if [[ -f "$FILE" ]]; then
+if [[ -f "$BUTTON" && -f "$RELEASE" ]]; then
     # Replace LONG_PRESS_THRESHOLD=2 with LONG_PRESS_THRESHOLD=1
     sed -i 's/^LONG_PRESS_THRESHOLD=2$/LONG_PRESS_THRESHOLD=1/' "$FILE"
     # Always echo 1 to never sleep
