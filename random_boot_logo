@@ -24,12 +24,29 @@ if [ "$NUM_FILES" -eq 0 ]; then
     exit 1
 fi
 
-# Load last index if it exists; validate it's numeric
-LAST_INDEX=0
+# If only 1 image, nothing to do
+if [ "$NUM_FILES" -eq 1 ]; then
+    exit 0
+fi
+
+# Load current displayed image index if it exists; validate it's numeric
+CURRENT_INDEX=0
 if [ -f "$NEXTIMAGE_FILE" ]; then
     read -r READ_INDEX < "$NEXTIMAGE_FILE" 2>/dev/null || true
     if [[ "$READ_INDEX" =~ ^[0-9]+$ ]]; then
-        LAST_INDEX="$READ_INDEX"
+        CURRENT_INDEX="$READ_INDEX"
+    fi
+fi
+
+# Load run toggle (tracks whether to change image on this run)
+RUN_TOGGLE_FILE="$BOOTLOGOS/.runtoggle"
+TOGGLE=0
+if [ -f "$RUN_TOGGLE_FILE" ]; then
+    read -r TOGGLE < "$RUN_TOGGLE_FILE" 2>/dev/null || true
+    if [[ "$TOGGLE" =~ ^[0-9]+$ ]]; then
+        : # valid
+    else
+        TOGGLE=0
     fi
 fi
 
@@ -39,16 +56,41 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Generate a new random index, different from LAST_INDEX
-while :; do
-    RAND_INDEX=$(( (RANDOM % NUM_FILES) + 1 ))
-    if [ "$RAND_INDEX" -ne "$LAST_INDEX" ] || [ "$NUM_FILES" -eq 1 ]; then
-        break
+# Generate the index for this run
+if [ "$NUM_FILES" -eq 2 ]; then
+    # Only change image every other run via toggle
+    if [ "$TOGGLE" -eq 0 ]; then
+        # This run: keep current image (no change)
+        RAND_INDEX="$CURRENT_INDEX"
+        [ "$RAND_INDEX" -eq 0 ] && RAND_INDEX=1  # first run, pick image 1
+    else
+        # This run: switch to the other image
+        if [ "$CURRENT_INDEX" -eq 1 ]; then
+            RAND_INDEX=2
+        else
+            RAND_INDEX=1
+        fi
     fi
-done
+    CURRENT_INDEX="$RAND_INDEX"
+else
+    # Only change on toggle runs
+    if [ "$TOGGLE" -eq 0 ] && [ "$CURRENT_INDEX" -ne 0 ]; then
+        RAND_INDEX="$CURRENT_INDEX"
+    else
+        # Random selection different from current index
+        while :; do
+            RAND_INDEX=$(( (RANDOM % NUM_FILES) + 1 ))
+            if [ "$RAND_INDEX" -ne "$CURRENT_INDEX" ] || [ "$CURRENT_INDEX" -eq 0 ]; then
+                break
+            fi
+        done
+        CURRENT_INDEX="$RAND_INDEX"
+    fi
+fi
 
-# Save the new index
-echo "$RAND_INDEX" > "$NEXTIMAGE_FILE"
+# Save the current index and toggle the run flag
+echo "$CURRENT_INDEX" > "$NEXTIMAGE_FILE"
+echo $(( 1 - TOGGLE )) > "$RUN_TOGGLE_FILE"
 
 # Pick the file at that index
 SELECTED_FILE="${BMP_FILES[$((RAND_INDEX-1))]}"
