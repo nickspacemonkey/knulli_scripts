@@ -1,6 +1,8 @@
 #!/bin/bash
+set -euo pipefail
 
-# Define  directories
+# Random boot logo selector
+# Copies a random .bmp from /userdata/bootlogos to /boot/bootlogo.bmp
 BOOTLOGOS="/userdata/bootlogos"
 NEXTIMAGE_FILE="$BOOTLOGOS/.nextimage"
 BOOTLOGO="/boot/bootlogo.bmp"
@@ -10,8 +12,10 @@ if [ ! -d "$BOOTLOGOS" ]; then
     exit 1
 fi
 
-# Find all .bmp files in bootlogos
-mapfile -t BMP_FILES < <(find "$BOOTLOGOS" -maxdepth 1 -type f -name "*.bmp" | sort)
+# Find all .bmp files using nullglob (no subprocess)
+shopt -s nullglob
+BMP_FILES=("$BOOTLOGOS"/*.bmp)
+shopt -u nullglob
 
 # Count how many .bmp files exist
 NUM_FILES=${#BMP_FILES[@]}
@@ -20,11 +24,20 @@ if [ "$NUM_FILES" -eq 0 ]; then
     exit 1
 fi
 
-# Load last index if it exists
+# Load last index if it exists; validate it's numeric
 LAST_INDEX=0
 if [ -f "$NEXTIMAGE_FILE" ]; then
-    LAST_INDEX=$(cat "$NEXTIMAGE_FILE")
+    read -r READ_INDEX < "$NEXTIMAGE_FILE" 2>/dev/null || true
+    if [[ "$READ_INDEX" =~ ^[0-9]+$ ]]; then
+        LAST_INDEX="$READ_INDEX"
+    fi
 fi
+
+# Trap: ensure /boot is remounted read-only even on failure
+cleanup() {
+    mount -o remount,r /boot 2>/dev/null || true
+}
+trap cleanup EXIT
 
 # Generate a new random index, different from LAST_INDEX
 while :; do
@@ -40,13 +53,15 @@ echo "$RAND_INDEX" > "$NEXTIMAGE_FILE"
 # Pick the file at that index
 SELECTED_FILE="${BMP_FILES[$((RAND_INDEX-1))]}"
 
-# Make /boot writable
-mount -o remount,rw /boot
+# Make /boot writable (only if not already writable)
+if ! touch "$BOOTLOGO" 2>/dev/null; then
+    mount -o remount,rw /boot
+fi
 
 # Copy it into root as bootlogo.bmp
 cp -f "$SELECTED_FILE" "$BOOTLOGO"
 
-# Make /boot only readable
-mount -o remount,r /boot
+# Make /boot only readable (handled by trap on EXIT, but do it explicitly here too)
+mount -o remount,r /boot 2>/dev/null || true
 
 sync
