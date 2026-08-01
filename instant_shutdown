@@ -1,14 +1,58 @@
 #!/bin/bash
+#
+# Change power button behaviour on the Allwinner H700 board:
+#   Short press → shutdown (was suspend)
+#
 
-# File path
-BUTTON="/usr/bin/power-button"
-RELEASE="/usr/bin/power-button-release"
-# Check if the file exists
-if [[ -f "$BUTTON" && -f "$RELEASE" ]]; then
-    # Replace LONG_PRESS_THRESHOLD=2 with LONG_PRESS_THRESHOLD=0.1
-    sed -i 's/^LONG_PRESS_THRESHOLD=2$/LONG_PRESS_THRESHOLD=0.1/' "$BUTTON"
-    # Always echo 1 to never sleep
-    sed -i 's/echo "0" > "\$POWER_BUTTON_STATE"/echo "1" > "\$POWER_BUTTON_STATE"/' "$RELEASE"
-else
-    exit 1
+set -euo pipefail
+
+TARGET_SCRIPT="/usr/bin/power-button"
+BACKUP_SUFFIX=".bak-$(date +%Y%m%d%H%M%S)"
+
+if [ "$(id -u)" -ne 0 ]; then
+  exit 1
 fi
+
+if [ ! -f "${TARGET_SCRIPT}${BACKUP_SUFFIX}" ]; then
+  cp "$TARGET_SCRIPT" "${TARGET_SCRIPT}${BACKUP_SUFFIX}"
+fi
+
+cat > "$TARGET_SCRIPT" <<'SCRIPT'
+#!/bin/bash
+
+LOCK_FILE="/var/run/power-button-script.lock"
+POWER_BUTTON_STATE="/var/run/power-button.held"
+RESUME_FLAG="/var/run/power-button.wake"
+
+rm -f "$POWER_BUTTON_STATE"
+
+if [ -e "$RESUME_FLAG" ]; then
+    rm -f "$RESUME_FLAG"
+    exit 0
+fi
+
+exec 200>"${LOCK_FILE}"
+if ! flock -n 200; then
+    exit 0
+fi
+
+trap 'flock -u 200;' EXIT
+
+shutdown_system() {
+    if knulli-board-capability "rumble" >/dev/null 2>&1 && [ -f /usr/bin/knulli-rumble ]; then
+        knulli-rumble 0.2 &
+    fi
+
+    if knulli-board-capability "pwrled" >/dev/null 2>&1 && [ -f /usr/bin/knulli-power-led ]; then
+        knulli-power-led notification &
+    fi
+
+    knulli-shutdown -s
+}
+
+shutdown_system
+
+exit 0
+SCRIPT
+
+chmod +x "$TARGET_SCRIPT"
