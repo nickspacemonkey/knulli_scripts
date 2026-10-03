@@ -21,8 +21,7 @@ disable them there and reboot for the change to take effect.
 
 Changes the power button behaviour on Allwinner H700 devices so that a short press
 shuts the device down instead of suspending it. The original
-`/usr/bin/power-button` is backed up before it is replaced. This service must run as
-root.
+`/usr/bin/power-button` is backed up before it is replaced.
 
 ### `random_boot_logo`
 
