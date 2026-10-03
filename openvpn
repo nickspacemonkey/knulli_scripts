@@ -1,0 +1,78 @@
+#!/bin/bash
+
+OPENVPN_DIR="/userdata/system/openvpn"
+LOGFILE="/userdata/system/logs/openvpn.log"
+
+find_config() {
+    CONFIG=$(find "$OPENVPN_DIR" -maxdepth 1 -type f -name "*.ovpn" | head -n 1)
+
+    if [ -z "$CONFIG" ]; then
+        echo "No OpenVPN config found in $OPENVPN_DIR"
+        exit 1
+    fi
+}
+
+start_vpn() {
+    if pidof openvpn >/dev/null; then
+        echo "OpenVPN already running"
+        exit 0
+    fi
+
+    find_config
+
+    # Create TUN device if missing
+    if [ ! -e /dev/net/tun ]; then
+        mkdir -p /dev/net
+        mknod /dev/net/tun c 10 200 2>/dev/null
+        chmod 600 /dev/net/tun
+    fi
+
+    mkdir -p "$(dirname "$LOGFILE")"
+
+    echo "Starting OpenVPN using:"
+    echo "$CONFIG"
+
+    openvpn \
+        --config "$CONFIG" \
+        --daemon \
+        --log "$LOGFILE"
+}
+
+stop_vpn() {
+    if pidof openvpn >/dev/null; then
+        killall openvpn
+    fi
+}
+
+status_vpn() {
+    if pidof openvpn >/dev/null; then
+        echo "OpenVPN running"
+        exit 0
+    else
+        echo "OpenVPN stopped"
+        exit 1
+    fi
+}
+
+case "$1" in
+    start)
+        start_vpn
+        ;;
+    stop)
+        stop_vpn
+        ;;
+    restart)
+        stop_vpn
+        sleep 2
+        start_vpn
+        ;;
+    status)
+        status_vpn
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+        ;;
+esac
+
+exit 0
